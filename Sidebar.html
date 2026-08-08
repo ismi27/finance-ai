@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+
+<?!= include("Style"); ?>
+
+</head>
+
+<body>
+
+<div class="app">
+
+    <div class="sidebar">
+
+        <div class="logo">
+
+            💰 Finance AI
+
+        </div>
+
+        <div class="menu">
+
+            <div class="item active"
+                 onclick="showPage('dashboard',this)">
+                 🏠 Dashboard
+            </div>
+
+            <div class="item"
+                 onclick="showPage('transaction',this)">
+                 ➕ Tambah Transaksi
+            </div>
+
+            <div class="item"
+                 onclick="showPage('inbox',this)">
+                 📥 Inbox
+            </div>
+
+            <div class="item"
+                 onclick="showPage('account',this)">
+                 💳 Account
+            </div>
+
+            <div class="item"
+                 onclick="showPage('analytics',this)">
+                 📊 Analytics
+            </div>
+
+            <div class="item"
+                 onclick="showPage('setting',this)">
+                 ⚙️ Setting
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="content">
+
+        <?!= include("Dashboard"); ?>
+
+        <?!= include("Transaction"); ?>
+
+        <?!= include("Inbox"); ?>
+
+        <?!= include("Account"); ?>
+
+        <?!= include("Analytics"); ?>
+
+        <?!= include("Setting"); ?>
+
+    </div>
+
+</div>
+
+<?!= include("Script"); ?>
+
+</body>
+
+</html>

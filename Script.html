@@ -1,0 +1,23 @@
+<script>
+
+function showPage(pageName, element){
+
+    document.querySelectorAll(".page").forEach(page=>{
+
+        page.style.display="none";
+
+    });
+
+    document.querySelectorAll(".item").forEach(item=>{
+
+        item.classList.remove("active");
+
+    });
+
+    document.getElementById(pageName+"Page").style.display="block";
+
+    element.classList.add("active");
+
+}
+
+</script>
