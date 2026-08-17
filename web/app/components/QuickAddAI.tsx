@@ -69,13 +69,23 @@ export default function QuickAddAI({
         try {
             const now = new Date();
 
-            const date = now.toISOString().split("T")[0];
+            const jakartaDate = new Intl.DateTimeFormat("en-CA", {
+                timeZone: "Asia/Jakarta",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+            }).format(now);
 
-            const time = now.toLocaleTimeString("id-ID", {
+            const jakartaTime = new Intl.DateTimeFormat("en-GB", {
+                timeZone: "Asia/Jakarta",
                 hour: "2-digit",
                 minute: "2-digit",
+                second: "2-digit",
                 hour12: false,
-            });
+            }).format(now);
+
+            const date = jakartaDate;
+            const time = jakartaTime;
 
             const response = await fetch("/api/transactions", {
                 method: "POST",
@@ -219,8 +229,8 @@ export default function QuickAddAI({
 
                         <div
                             className={`shrink-0 text-right text-base font-bold ${transaction.type === "income"
-                                    ? "text-green-600"
-                                    : "text-red-500"
+                                ? "text-green-600"
+                                : "text-red-500"
                                 }`}
                         >
                             {transaction.type === "income" ? "+" : "-"}

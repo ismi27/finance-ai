@@ -11,6 +11,31 @@ type Transaction = {
   account: string;
   date: string;
   note: string;
+  createdAt?: string;
+};
+
+const formatDateTime = (value: string | Date) => {
+  const date = new Date(value);
+
+  if (isNaN(date.getTime())) {
+    return "-";
+  }
+
+  const datePart = new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+
+  const timePart = new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+
+  return `${datePart} | ${timePart} (+7 GMT)`;
 };
 
 const categories = [
@@ -60,6 +85,7 @@ export default function Home() {
               account: string;
               date: string;
               note: string;
+              createdAt: string;
             }) => ({
               id: transaction.id,
               type: transaction.type,
@@ -68,6 +94,7 @@ export default function Home() {
               account: transaction.account,
               date: transaction.date,
               note: transaction.note || "",
+              createdAt: transaction.createdAt,
             })
           );
 
@@ -254,13 +281,13 @@ export default function Home() {
             </p>
           </button>
 
-         
+
         </div>
-         <div className="mt-3">
-            <QuickAddAI onSaved={() => {
-              window.location.reload();
-            }} />
-          </div>
+        <div className="mt-3">
+          <QuickAddAI onSaved={() => {
+            window.location.reload();
+          }} />
+        </div>
       </section>
 
       {/* RECENT TRANSACTIONS */}
@@ -565,7 +592,9 @@ export default function Home() {
                   </p>
 
                   <p className="mt-1 text-xs text-gray-400">
-                    {transaction.date}
+                    {transaction.createdAt
+                      ? formatDateTime(transaction.createdAt)
+                      : "Baru saja"}
                   </p>
                 </div>
 
