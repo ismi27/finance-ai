@@ -15,7 +15,38 @@ type Transaction = {
 };
 
 const formatDateTime = (value: string | Date) => {
-  const date = new Date(value);
+  if (!value) {
+    return "-";
+  }
+
+  let date: Date;
+
+  // Format dari Google Sheet:
+  // 11/08/2026 14:46:24
+  if (
+    typeof value === "string" &&
+    /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/.test(value)
+  ) {
+    const [datePart, timePart] = value.split(" ");
+
+    const [day, month, year] = datePart.split("/").map(Number);
+    const [hour, minute, second] = timePart.split(":").map(Number);
+
+    // Google Sheet dianggap waktu Jakarta
+    date = new Date(
+      Date.UTC(
+        year,
+        month - 1,
+        day,
+        hour - 7,
+        minute,
+        second
+      )
+    );
+  } else {
+    // Format ISO / Date
+    date = new Date(value);
+  }
 
   if (isNaN(date.getTime())) {
     return "-";
