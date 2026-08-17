@@ -69,6 +69,36 @@ const formatDateTime = (value: string | Date) => {
   return `${datePart} | ${timePart} (+7 GMT)`;
 };
 
+const Loader = ({ text = "Memuat..." }: { text?: string }) => (
+  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#f7f7f5]/95 backdrop-blur-md">
+    <div className="flex flex-col items-center">
+
+      {/* Logo */}
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#ffa500] text-3xl shadow-lg">
+        💰
+      </div>
+
+      {/* App Name */}
+      <p className="mt-4 text-base font-bold text-[#171717]">
+        My Finance AI
+      </p>
+
+      {/* Spinner */}
+      <div className="mt-5 relative h-8 w-8">
+        <div className="absolute inset-0 rounded-full border-[3px] border-gray-200" />
+
+        <div className="absolute inset-0 animate-spin rounded-full border-[3px] border-transparent border-t-[#171717]" />
+      </div>
+
+      {/* Loading Text */}
+      <p className="mt-4 text-sm font-medium text-gray-600">
+        {text}
+      </p>
+
+    </div>
+  </div>
+);
+
 const categories = [
   "Makanan",
   "Transport",
@@ -89,9 +119,15 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("home");
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [savingTransaction, setSavingTransaction] = useState(false);
 
   useEffect(() => {
     const loadTransactions = async () => {
+      setPageLoading(true);
+
+      const startTime = Date.now();
+
       try {
         const response = await fetch("/api/transactions", {
           method: "GET",
@@ -132,6 +168,17 @@ export default function Home() {
         setTransactions(loadedTransactions);
       } catch (error) {
         console.error("Load transactions error:", error);
+      } finally {
+        const elapsed = Date.now() - startTime;
+        const minimumLoadingTime = 800;
+
+        if (elapsed < minimumLoadingTime) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, minimumLoadingTime - elapsed)
+          );
+        }
+
+        setPageLoading(false);
       }
     };
 
@@ -189,6 +236,10 @@ export default function Home() {
       return;
     }
 
+    setSavingTransaction(true);
+
+    const startTime = Date.now();
+
     try {
       const response = await fetch("/api/transactions", {
         method: "POST",
@@ -210,7 +261,9 @@ export default function Home() {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.error || "Gagal menyimpan transaksi.");
+        throw new Error(
+          result.error || "Gagal menyimpan transaksi."
+        );
       }
 
       const newTransaction: Transaction = {
@@ -232,9 +285,24 @@ export default function Home() {
       setNote("");
       setActiveTab("home");
 
+      // Loader tetap tampil sebentar saat kembali ke Home
+      const elapsed = Date.now() - startTime;
+      const minimumLoadingTime = 800;
+
+      if (elapsed < minimumLoadingTime) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, minimumLoadingTime - elapsed)
+        );
+      }
+
+      setSavingTransaction(false);
+
       alert("Transaksi berhasil disimpan! ✅");
+
     } catch (error) {
       console.error("Save transaction error:", error);
+
+      setSavingTransaction(false);
 
       alert(
         error instanceof Error
@@ -667,80 +735,87 @@ export default function Home() {
     {
       id: "data",
       icon: "📊",
-      label: "Data",
+      label: "Transaksi",
     },
   ];
 
   return (
-    <main className="min-h-screen bg-[#f7f7f5] text-[#171717]">
+    <>
+      {pageLoading && <Loader text="Memuat transaksi..." />}
 
-      {/* HEADER */}
-      <header className="sticky top-0 z-10 border-b border-black/5 bg-[#f7f7f5]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-md items-center justify-between px-5 py-4">
-          <button
-            onClick={() => setActiveTab("home")}
-            className="flex items-center gap-3 text-left"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ffa500] text-xl">
-              💰
-            </div>
+      {savingTransaction && (
+        <Loader text="Menyimpan transaksi..." />
+      )}
 
-            <div>
-              <h1 className="text-base font-bold">
-                My Finance AI
-              </h1>
+      <main className="min-h-screen bg-[#f7f7f5] text-[#171717]">
 
-              <p className="text-xs text-gray-500">
-                Personal Finance
-              </p>
-            </div>
-          </button>
-
-          <button className="text-xl">
-            ☰
-          </button>
-        </div>
-      </header>
-
-      {/* CONTENT */}
-      <div className="mx-auto max-w-md px-5 pb-28">
-
-        {activeTab === "home" && renderHome()}
-
-        {activeTab === "input" && renderInput()}
-
-        {activeTab === "scan" && renderScan()}
-
-        {activeTab === "data" && renderData()}
-
-      </div>
-
-      {/* BOTTOM NAV */}
-      <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-black/5 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-md items-center justify-around px-2 py-2">
-
-          {menuItems.map((item) => (
+        {/* HEADER */}
+        <header className="sticky top-0 z-10 border-b border-black/5 bg-[#f7f7f5]/95 backdrop-blur">
+          <div className="mx-auto flex max-w-md items-center justify-between px-5 py-4">
             <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs transition ${activeTab === item.id
-                ? "font-semibold text-[#171717]"
-                : "text-gray-400"
-                }`}
+              onClick={() => setActiveTab("home")}
+              className="flex items-center gap-3 text-left"
             >
-              <span className="text-lg">
-                {item.icon}
-              </span>
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ffa500] text-xl">
+                💰
+              </div>
 
-              <span>
-                {item.label}
-              </span>
+              <div>
+                <h1 className="text-base font-bold">
+                  My Finance AI
+                </h1>
+
+                <p className="text-xs text-gray-500">
+                  Personal Finance
+                </p>
+              </div>
             </button>
-          ))}
+
+            <button className="text-xl">
+              ☰
+            </button>
+          </div>
+        </header>
+
+        {/* CONTENT */}
+        <div className="mx-auto max-w-md px-5 pb-28">
+
+          {activeTab === "home" && renderHome()}
+
+          {activeTab === "input" && renderInput()}
+
+          {activeTab === "scan" && renderScan()}
+
+          {activeTab === "data" && renderData()}
 
         </div>
-      </nav>
 
-    </main>
+        {/* BOTTOM NAV */}
+        <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-black/5 bg-white/95 backdrop-blur">
+          <div className="mx-auto flex max-w-md items-center justify-around px-2 py-2">
+
+            {menuItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs transition ${activeTab === item.id
+                  ? "font-semibold text-[#171717]"
+                  : "text-gray-400"
+                  }`}
+              >
+                <span className="text-lg">
+                  {item.icon}
+                </span>
+
+                <span>
+                  {item.label}
+                </span>
+              </button>
+            ))}
+
+          </div>
+        </nav>
+      </main>
+    </>
   );
 }

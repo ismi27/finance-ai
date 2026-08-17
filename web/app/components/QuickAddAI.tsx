@@ -292,7 +292,31 @@ export default function QuickAddAI({
                         disabled={saving}
                         className="mt-4 flex w-full items-center justify-center rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                        {saving ? "Menyimpan..." : "Simpan Transaksi"}
+                        {saving && (
+                            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#f7f7f5]/95 backdrop-blur-md">
+                                <div className="flex flex-col items-center">
+
+                                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#ffa500] text-3xl shadow-lg">
+                                        💰
+                                    </div>
+
+                                    <p className="mt-4 text-base font-bold text-[#171717]">
+                                        My Finance AI
+                                    </p>
+
+                                    <div className="relative mt-5 h-8 w-8">
+                                        <div className="absolute inset-0 rounded-full border-[3px] border-gray-200" />
+
+                                        <div className="absolute inset-0 animate-spin rounded-full border-[3px] border-transparent border-t-[#171717]" />
+                                    </div>
+
+                                    <p className="mt-4 text-sm font-medium text-gray-600">
+                                        Menyimpan transaksi...
+                                    </p>
+
+                                </div>
+                            </div>
+                        )}
                     </button>
                 </div>
             )}
