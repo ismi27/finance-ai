@@ -1,82 +1,179 @@
 <!DOCTYPE html>
 <html>
-
 <head>
+  <base target="_top">
+  <meta charset="UTF-8">
 
-<meta charset="UTF-8">
-
-<?!= include("Style"); ?>
-
+  <?!= include("Style"); ?>
 </head>
 
 <body>
 
-<div class="app">
+  <div class="app">
 
-    <div class="sidebar">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
 
-        <div class="logo">
+      <div class="brand">
+        <div class="brand-icon">💰</div>
 
-            💰 Finance AI
-
+        <div>
+          <div class="brand-title">Finance AI</div>
+          <div class="brand-subtitle">Personal Finance</div>
         </div>
+      </div>
 
-        <div class="menu">
 
-            <div class="item active"
-                 onclick="showPage('dashboard',this)">
-                 🏠 Dashboard
-            </div>
+      <nav class="navigation">
 
-            <div class="item"
-                 onclick="showPage('transaction',this)">
-                 ➕ Tambah Transaksi
-            </div>
+        <button
+          class="nav-item active"
+          data-page="dashboard"
+          onclick="navigateTo('dashboard', this)"
+        >
+          <span class="nav-icon">🏠</span>
+          <span>Dashboard</span>
+        </button>
 
-            <div class="item"
-                 onclick="showPage('inbox',this)">
-                 📥 Inbox
-            </div>
 
-            <div class="item"
-                 onclick="showPage('account',this)">
-                 💳 Account
-            </div>
+        <button
+          class="nav-item"
+          data-page="transaction"
+          onclick="navigateTo('transaction', this)"
+        >
+          <span class="nav-icon">➕</span>
+          <span>Tambah Transaksi</span>
+        </button>
 
-            <div class="item"
-                 onclick="showPage('analytics',this)">
-                 📊 Analytics
-            </div>
 
-            <div class="item"
-                 onclick="showPage('setting',this)">
-                 ⚙️ Setting
-            </div>
+        <button
+          class="nav-item"
+          data-page="inbox"
+          onclick="navigateTo('inbox', this)"
+        >
+          <span class="nav-icon">📥</span>
+          <span>Inbox</span>
+        </button>
 
+
+        <button
+          class="nav-item"
+          data-page="account"
+          onclick="navigateTo('account', this)"
+        >
+          <span class="nav-icon">💳</span>
+          <span>Account</span>
+        </button>
+
+
+        <button
+          class="nav-item"
+          data-page="analytics"
+          onclick="navigateTo('analytics', this)"
+        >
+          <span class="nav-icon">📊</span>
+          <span>Analytics</span>
+        </button>
+
+      </nav>
+
+
+      <div class="sidebar-bottom">
+
+        <button
+          class="nav-item"
+          data-page="setting"
+          onclick="navigateTo('setting', this)"
+        >
+          <span class="nav-icon">⚙️</span>
+          <span>Setting</span>
+        </button>
+
+      </div>
+
+    </aside>
+
+
+    <!-- CONTENT -->
+    <main class="content">
+
+      <section id="page-dashboard" class="page active">
+        <h1>Dashboard</h1>
+        <p class="page-description">
+          Welcome back 👋
+        </p>
+
+        <div class="placeholder-card">
+          Dashboard akan kita bangun di v0.2.
         </div>
+      </section>
 
-    </div>
 
-    <div class="content">
+      <section id="page-transaction" class="page">
+        <h1>Tambah Transaksi</h1>
+        <p class="page-description">
+          Tambahkan transaksi baru.
+        </p>
 
-        <?!= include("Dashboard"); ?>
+        <div class="placeholder-card">
+          Form transaksi akan kita bangun berikutnya.
+        </div>
+      </section>
 
-        <?!= include("Transaction"); ?>
 
-        <?!= include("Inbox"); ?>
+      <section id="page-inbox" class="page">
+        <h1>Inbox</h1>
+        <p class="page-description">
+          Transaksi yang menunggu review.
+        </p>
 
-        <?!= include("Account"); ?>
+        <div class="placeholder-card">
+          Inbox akan kita bangun berikutnya.
+        </div>
+      </section>
 
-        <?!= include("Analytics"); ?>
 
-        <?!= include("Setting"); ?>
+      <section id="page-account" class="page">
+        <h1>Account</h1>
+        <p class="page-description">
+          Kelola rekening, e-wallet, kartu kredit, dan akun lainnya.
+        </p>
 
-    </div>
+        <div class="placeholder-card">
+          Account manager akan kita bangun berikutnya.
+        </div>
+      </section>
 
-</div>
 
-<?!= include("Script"); ?>
+      <section id="page-analytics" class="page">
+        <h1>Analytics</h1>
+        <p class="page-description">
+          Analisis keuanganmu.
+        </p>
+
+        <div class="placeholder-card">
+          Analytics akan kita bangun berikutnya.
+        </div>
+      </section>
+
+
+      <section id="page-setting" class="page">
+        <h1>Setting</h1>
+        <p class="page-description">
+          Pengaturan Finance AI.
+        </p>
+
+        <div class="placeholder-card">
+          Setting akan kita bangun berikutnya.
+        </div>
+      </section>
+
+    </main>
+
+  </div>
+
+
+  <?!= include("Script"); ?>
 
 </body>
-
 </html>

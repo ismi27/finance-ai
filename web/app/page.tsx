@@ -13,6 +13,7 @@ type Transaction = {
   note: string;
   merchant?: string;
   location?: string;
+  createdAt?: string;
 };
 
 type ScanTransaction = {
@@ -36,6 +37,88 @@ type ScanResult = {
   missingFields: string[];
   message: string;
 };
+
+const formatDateTime = (value: string | Date) => {
+  if (!value) {
+    return "-";
+  }
+
+  let date: Date;
+
+  // Format dari Google Sheet:
+  // 11/08/2026 14:46:24
+  if (
+    typeof value === "string" &&
+    /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/.test(value)
+  ) {
+    const [datePart, timePart] = value.split(" ");
+
+    const [day, month, year] = datePart.split("/").map(Number);
+    const [hour, minute, second] = timePart.split(":").map(Number);
+
+    // Google Sheet dianggap waktu Jakarta
+    date = new Date(
+      Date.UTC(
+        year,
+        month - 1,
+        day,
+        hour - 7,
+        minute,
+        second
+      )
+    );
+  } else {
+    date = new Date(value);
+  }
+
+  if (isNaN(date.getTime())) {
+    return "-";
+  }
+
+  const datePart = new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+
+  const timePart = new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+
+  return `${datePart} | ${timePart} (+7 GMT)`;
+};
+
+const Loader = ({ text = "Memuat..." }: { text?: string }) => (
+  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#f7f7f5]/95 backdrop-blur-md">
+    <div className="flex flex-col items-center">
+      {/* Logo */}
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#ffa500] text-3xl shadow-lg">
+        💰
+      </div>
+
+      {/* App Name */}
+      <p className="mt-4 text-base font-bold text-[#171717]">
+        My Finance AI
+      </p>
+
+      {/* Spinner */}
+      <div className="relative mt-5 h-8 w-8">
+        <div className="absolute inset-0 rounded-full border-[3px] border-gray-200" />
+
+        <div className="absolute inset-0 animate-spin rounded-full border-[3px] border-transparent border-t-[#171717]" />
+      </div>
+
+      {/* Loading Text */}
+      <p className="mt-4 text-sm font-medium text-gray-600">
+        {text}
+      </p>
+    </div>
+  </div>
+);
 
 const categories = [
   "Makanan",
@@ -110,8 +193,15 @@ export default function Home() {
   const [transactions, setTransactions] =
     useState<Transaction[]>([]);
 
+  const [pageLoading, setPageLoading] = useState(true);
+  const [savingTransaction, setSavingTransaction] = useState(false);
+
   useEffect(() => {
     const loadTransactions = async () => {
+      setPageLoading(true);
+
+      const startTime = Date.now();
+
       try {
         const response = await fetch("/api/transactions", {
           method: "GET",
@@ -138,6 +228,7 @@ export default function Home() {
               note: string;
               merchant?: string;
               location?: string;
+              createdAt?: string;
             }) => ({
               id: transaction.id,
               type: transaction.type,
@@ -148,6 +239,7 @@ export default function Home() {
               note: transaction.note || "",
               merchant: transaction.merchant || "",
               location: transaction.location || "",
+              createdAt: transaction.createdAt,
             })
           );
 
@@ -157,6 +249,20 @@ export default function Home() {
           "Load transactions error:",
           error
         );
+      } finally {
+        const elapsed = Date.now() - startTime;
+        const minimumLoadingTime = 800;
+
+        if (elapsed < minimumLoadingTime) {
+          await new Promise((resolve) =>
+            setTimeout(
+              resolve,
+              minimumLoadingTime - elapsed
+            )
+          );
+        }
+
+        setPageLoading(false);
       }
     };
 
@@ -195,7 +301,6 @@ export default function Home() {
     const previewUrl = URL.createObjectURL(file);
     setScanPreview(previewUrl);
 
-    // Reset hasil scan sebelumnya
     setScanResult(null);
     setScanError("");
   };
@@ -233,8 +338,6 @@ export default function Home() {
 
       setScanResult(result);
 
-      // Kalau AI menemukan transaksi,
-      // masukkan hasilnya ke form editable.
       if (result.transaction) {
         const transaction = result.transaction;
 
@@ -328,10 +431,8 @@ export default function Home() {
             account: scanAccount,
             date: scanDate,
             note: scanNote,
-
             merchant: scanMerchant,
             location: scanLocation,
-
             source: "scan",
             status: "confirmed",
           }),
@@ -413,6 +514,10 @@ export default function Home() {
       return;
     }
 
+    setSavingTransaction(true);
+
+    const startTime = Date.now();
+
     try {
       const response = await fetch(
         "/api/transactions",
@@ -438,8 +543,7 @@ export default function Home() {
 
       if (!response.ok || !result.success) {
         throw new Error(
-          result.error ||
-            "Gagal menyimpan transaksi."
+          result.error || "Gagal menyimpan transaksi."
         );
       }
 
@@ -462,14 +566,29 @@ export default function Home() {
       setNote("");
       setActiveTab("home");
 
-      alert(
-        "Transaksi berhasil disimpan! ✅"
-      );
+      // Loader tetap tampil sebentar saat kembali ke Home
+      const elapsed = Date.now() - startTime;
+      const minimumLoadingTime = 800;
+
+      if (elapsed < minimumLoadingTime) {
+        await new Promise((resolve) =>
+          setTimeout(
+            resolve,
+            minimumLoadingTime - elapsed
+          )
+        );
+      }
+
+      setSavingTransaction(false);
+
+      alert("Transaksi berhasil disimpan! ✅");
     } catch (error) {
       console.error(
         "Save transaction error:",
         error
       );
+
+      setSavingTransaction(false);
 
       alert(
         error instanceof Error
@@ -515,10 +634,6 @@ export default function Home() {
   const renderHome = () => (
     <>
       <section className="pt-7">
-        <p className="text-sm text-gray-500">
-          Selamat datang 👋
-        </p>
-
         <h2 className="mt-1 text-2xl font-bold">
           Keuanganmu
         </h2>
@@ -543,7 +658,7 @@ export default function Home() {
           Quick Actions
         </h3>
 
-        <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() =>
               setActiveTab("scan")
@@ -581,7 +696,9 @@ export default function Home() {
               Input transaksi manual
             </p>
           </button>
+        </div>
 
+        <div className="mt-3">
           <QuickAddAI
             onSaved={() => {
               window.location.reload();
@@ -1336,32 +1453,43 @@ export default function Home() {
 
                     {transaction.location && (
                       <p className="mt-1 text-xs text-gray-400">
-                        📍{" "}
-                        {transaction.location}
+                        📍 {transaction.location}
                       </p>
                     )}
 
                     <p className="mt-1 text-xs text-gray-400">
+                      Tanggal transaksi:{" "}
                       {transaction.date}
                     </p>
+
+                    {transaction.createdAt && (
+                      <p className="mt-1 text-xs text-gray-400">
+                        Dicatat:{" "}
+                        {formatDateTime(
+                          transaction.createdAt
+                        )}
+                      </p>
+                    )}
                   </div>
 
-                  <p
-                    className={`font-semibold ${
-                      transaction.type ===
+                  <div className="text-right">
+                    <p
+                      className={`font-semibold ${
+                        transaction.type ===
+                        "expense"
+                          ? "text-red-500"
+                          : "text-green-600"
+                      }`}
+                    >
+                      {transaction.type ===
                       "expense"
-                        ? "text-red-500"
-                        : "text-green-600"
-                    }`}
-                  >
-                    {transaction.type ===
-                    "expense"
-                      ? "-"
-                      : "+"}
-                    {formatRupiah(
-                      transaction.amount
-                    )}
-                  </p>
+                        ? "-"
+                        : "+"}
+                      {formatRupiah(
+                        transaction.amount
+                      )}
+                    </p>
+                  </div>
                 </div>
               </div>
             )
@@ -1394,7 +1522,7 @@ export default function Home() {
     {
       id: "data",
       icon: "📊",
-      label: "Data",
+      label: "Transaksi",
     },
   ];
 
@@ -1403,79 +1531,94 @@ export default function Home() {
   // =========================
 
   return (
-    <main className="min-h-screen bg-[#f7f7f5] text-[#171717]">
+    <>
+      {pageLoading && (
+        <Loader text="Memuat transaksi..." />
+      )}
 
-      {/* HEADER */}
-      <header className="sticky top-0 z-10 border-b border-black/5 bg-[#f7f7f5]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-md items-center justify-between px-5 py-4">
-          <button
-            onClick={() =>
-              setActiveTab("home")
-            }
-            className="flex items-center gap-3 text-left"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ffa500] text-xl">
-              💰
-            </div>
+      {savingTransaction && (
+        <Loader text="Menyimpan transaksi..." />
+      )}
 
-            <div>
-              <h1 className="text-base font-bold">
-                Finance AI
-              </h1>
+      <main className="min-h-screen bg-[#f7f7f5] text-[#171717]">
 
-              <p className="text-xs text-gray-500">
-                Personal Finance
-              </p>
-            </div>
-          </button>
-
-          <button className="text-xl">
-            ☰
-          </button>
-        </div>
-      </header>
-
-      {/* CONTENT */}
-      <div className="mx-auto max-w-md px-5 pb-28">
-        {activeTab === "home" &&
-          renderHome()}
-
-        {activeTab === "input" &&
-          renderInput()}
-
-        {activeTab === "scan" &&
-          renderScan()}
-
-        {activeTab === "data" &&
-          renderData()}
-      </div>
-
-      {/* BOTTOM NAV */}
-      <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-black/5 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-md items-center justify-around px-2 py-2">
-          {menuItems.map((item) => (
+        {/* HEADER */}
+        <header className="sticky top-0 z-10 border-b border-black/5 bg-[#f7f7f5]/95 backdrop-blur">
+          <div className="mx-auto flex max-w-md items-center justify-between px-5 py-4">
             <button
-              key={item.id}
               onClick={() =>
-                setActiveTab(item.id)
+                setActiveTab("home")
               }
-              className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs transition ${
-                activeTab === item.id
-                  ? "font-semibold text-[#171717]"
-                  : "text-gray-400"
-              }`}
+              className="flex items-center gap-3 text-left"
             >
-              <span className="text-lg">
-                {item.icon}
-              </span>
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ffa500] text-xl">
+                💰
+              </div>
 
-              <span>
-                {item.label}
-              </span>
+              <div>
+                <h1 className="text-base font-bold">
+                  My Finance AI
+                </h1>
+
+                <p className="text-xs text-gray-500">
+                  Personal Finance
+                </p>
+              </div>
             </button>
-          ))}
+
+            <button className="text-xl">
+              ☰
+            </button>
+          </div>
+        </header>
+
+        {/* CONTENT */}
+        <div className="mx-auto max-w-md px-5 pb-28">
+
+          {activeTab === "home" &&
+            renderHome()}
+
+          {activeTab === "input" &&
+            renderInput()}
+
+          {activeTab === "scan" &&
+            renderScan()}
+
+          {activeTab === "data" &&
+            renderData()}
+
         </div>
-      </nav>
-    </main>
+
+        {/* BOTTOM NAV */}
+        <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-black/5 bg-white/95 backdrop-blur">
+          <div className="mx-auto flex max-w-md items-center justify-around px-2 py-2">
+
+            {menuItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() =>
+                  setActiveTab(item.id)
+                }
+                className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs transition ${
+                  activeTab === item.id
+                    ? "font-semibold text-[#171717]"
+                    : "text-gray-400"
+                }`}
+              >
+                <span className="text-lg">
+                  {item.icon}
+                </span>
+
+                <span>
+                  {item.label}
+                </span>
+              </button>
+            ))}
+
+          </div>
+        </nav>
+
+      </main>
+    </>
   );
 }
