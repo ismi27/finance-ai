@@ -8,11 +8,17 @@ type Transaction = {
   type: "expense" | "income";
   amount: number;
   category: string;
+  subCategory?: string;
   account: string;
   date: string;
+  time?: string;
   note: string;
   merchant?: string;
   location?: string;
+  tag?: string;
+  attachment?: string;
+  source?: string;
+  status?: string;
   createdAt?: string;
 };
 
@@ -25,6 +31,7 @@ type ScanTransaction = {
   merchant: string;
   location: string;
   date: string;
+  time: string;
   note: string;
   tag: string;
 };
@@ -92,33 +99,173 @@ const formatDateTime = (value: string | Date) => {
   return `${datePart} | ${timePart} (+7 GMT)`;
 };
 
-const Loader = ({ text = "Memuat..." }: { text?: string }) => (
+
+/* =========================================================
+   LOCAL DATE
+   ========================================================= */
+
+const getLocalDate = () => {
+  const now = new Date();
+
+  const year = now.getFullYear();
+  const month = String(
+    now.getMonth() + 1
+  ).padStart(2, "0");
+  const day = String(
+    now.getDate()
+  ).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
+
+/* =========================================================
+   LOCAL TIME
+   ========================================================= */
+
+const getLocalTime = () => {
+  const now = new Date();
+
+  const hour = String(
+    now.getHours()
+  ).padStart(2, "0");
+
+  const minute = String(
+    now.getMinutes()
+  ).padStart(2, "0");
+
+  return `${hour}:${minute}`;
+};
+
+
+/* =========================================================
+   NORMALIZE TIME
+   ========================================================= */
+
+const normalizeTime = (value: string) => {
+  if (!value) {
+    return "";
+  }
+
+  const text = value
+    .trim()
+    .toUpperCase();
+
+  // HH:mm / H:mm / HH.mm
+  const normalMatch = text.match(
+    /^(\d{1,2})[:.](\d{2})$/
+  );
+
+  if (normalMatch) {
+    const hour = Number(
+      normalMatch[1]
+    );
+
+    const minute = Number(
+      normalMatch[2]
+    );
+
+    if (
+      hour >= 0 &&
+      hour <= 23 &&
+      minute >= 0 &&
+      minute <= 59
+    ) {
+      return `${String(hour).padStart(
+        2,
+        "0"
+      )}:${String(minute).padStart(
+        2,
+        "0"
+      )}`;
+    }
+  }
+
+  // AM / PM
+  const amPmMatch = text.match(
+    /^(\d{1,2})[:.](\d{2})\s*(AM|PM)$/
+  );
+
+  if (amPmMatch) {
+    let hour = Number(
+      amPmMatch[1]
+    );
+
+    const minute = Number(
+      amPmMatch[2]
+    );
+
+    const period =
+      amPmMatch[3];
+
+    if (
+      hour >= 1 &&
+      hour <= 12 &&
+      minute >= 0 &&
+      minute <= 59
+    ) {
+      if (period === "AM") {
+        if (hour === 12) {
+          hour = 0;
+        }
+      }
+
+      if (period === "PM") {
+        if (hour !== 12) {
+          hour += 12;
+        }
+      }
+
+      return `${String(hour).padStart(
+        2,
+        "0"
+      )}:${String(minute).padStart(
+        2,
+        "0"
+      )}`;
+    }
+  }
+
+  return "";
+};
+
+
+/* =========================================================
+   LOADER
+   ========================================================= */
+
+const Loader = ({
+  text = "Memuat...",
+}: {
+  text?: string;
+}) => (
   <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#f7f7f5]/95 backdrop-blur-md">
     <div className="flex flex-col items-center">
-      {/* Logo */}
       <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#ffa500] text-3xl shadow-lg">
         💰
       </div>
 
-      {/* App Name */}
       <p className="mt-4 text-base font-bold text-[#171717]">
         My Finance AI
       </p>
 
-      {/* Spinner */}
       <div className="relative mt-5 h-8 w-8">
         <div className="absolute inset-0 rounded-full border-[3px] border-gray-200" />
 
         <div className="absolute inset-0 animate-spin rounded-full border-[3px] border-transparent border-t-[#171717]" />
       </div>
 
-      {/* Loading Text */}
       <p className="mt-4 text-sm font-medium text-gray-600">
         {text}
       </p>
     </div>
   </div>
 );
+
+
+/* =========================================================
+   CATEGORIES
+   ========================================================= */
 
 const categories = [
   "Makanan",
@@ -130,6 +277,11 @@ const categories = [
   "Lainnya",
 ];
 
+
+/* =========================================================
+   ACCOUNTS
+   ========================================================= */
+
 const accounts = [
   "BNI",
   "Wallet",
@@ -137,42 +289,84 @@ const accounts = [
   "BCA QR",
 ];
 
+
+/* =========================================================
+   HOME
+   ========================================================= */
+
 export default function Home() {
-  const [activeTab, setActiveTab] = useState("home");
+  const [activeTab, setActiveTab] =
+    useState("home");
 
-  // =========================
-  // SCAN STATE
-  // =========================
 
-  const [scanImage, setScanImage] = useState<File | null>(null);
-  const [scanPreview, setScanPreview] = useState<string | null>(null);
+  /* =======================================================
+     SCAN STATE
+     ======================================================= */
 
-  const [isScanning, setIsScanning] = useState(false);
-  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-  const [scanError, setScanError] = useState("");
+  const [scanImage, setScanImage] =
+    useState<File | null>(null);
 
-  // Form hasil OCR yang bisa diedit user
+  const [scanPreview, setScanPreview] =
+    useState<string | null>(null);
+
+  const [isScanning, setIsScanning] =
+    useState(false);
+
+  const [scanResult, setScanResult] =
+    useState<ScanResult | null>(null);
+
+  const [scanError, setScanError] =
+    useState("");
+
+
+  /* =======================================================
+     SCAN FORM
+     ======================================================= */
+
   const [scanType, setScanType] =
-    useState<"expense" | "income">("expense");
+    useState<"expense" | "income">(
+      "expense"
+    );
 
-  const [scanAmount, setScanAmount] = useState("");
-  const [scanCategory, setScanCategory] = useState("Makanan");
-  const [scanAccount, setScanAccount] = useState("BNI");
-  const [scanMerchant, setScanMerchant] = useState("");
-  const [scanLocation, setScanLocation] = useState("");
-  const [scanDate, setScanDate] = useState("");
-  const [scanNote, setScanNote] = useState("");
+  const [scanAmount, setScanAmount] =
+    useState("");
 
-  const [isSavingScan, setIsSavingScan] = useState(false);
+  const [scanCategory, setScanCategory] =
+    useState("Makanan");
 
-  // =========================
-  // MANUAL INPUT STATE
-  // =========================
+  const [scanAccount, setScanAccount] =
+    useState("BNI");
+
+  const [scanMerchant, setScanMerchant] =
+    useState("");
+
+  const [scanLocation, setScanLocation] =
+    useState("");
+
+  const [scanDate, setScanDate] =
+    useState("");
+
+  const [scanTime, setScanTime] =
+    useState("");
+
+  const [scanNote, setScanNote] =
+    useState("");
+
+  const [isSavingScan, setIsSavingScan] =
+    useState(false);
+
+
+  /* =======================================================
+     MANUAL INPUT STATE
+     ======================================================= */
 
   const [type, setType] =
-    useState<"expense" | "income">("expense");
+    useState<"expense" | "income">(
+      "expense"
+    );
 
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] =
+    useState("");
 
   const [category, setCategory] =
     useState("Makanan");
@@ -180,21 +374,33 @@ export default function Home() {
   const [account, setAccount] =
     useState("BNI");
 
-  const [date, setDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [date, setDate] =
+    useState(getLocalDate());
 
-  const [note, setNote] = useState("");
+  const [time, setTime] =
+    useState(getLocalTime());
 
-  // =========================
-  // TRANSACTIONS
-  // =========================
+  const [note, setNote] =
+    useState("");
+
+
+  /* =======================================================
+     TRANSACTIONS
+     ======================================================= */
 
   const [transactions, setTransactions] =
     useState<Transaction[]>([]);
 
-  const [pageLoading, setPageLoading] = useState(true);
-  const [savingTransaction, setSavingTransaction] = useState(false);
+  const [pageLoading, setPageLoading] =
+    useState(true);
+
+  const [savingTransaction, setSavingTransaction] =
+    useState(false);
+
+
+  /* =======================================================
+     LOAD TRANSACTIONS
+     ======================================================= */
 
   useEffect(() => {
     const loadTransactions = async () => {
@@ -203,62 +409,119 @@ export default function Home() {
       const startTime = Date.now();
 
       try {
-        const response = await fetch("/api/transactions", {
-          method: "GET",
-          cache: "no-store",
-        });
+        const response = await fetch(
+          "/api/transactions",
+          {
+            method: "GET",
+            cache: "no-store",
+          }
+        );
 
-        const result = await response.json();
+        const result =
+          await response.json();
 
-        if (!response.ok || !result.success) {
+        if (
+          !response.ok ||
+          !result.success
+        ) {
           throw new Error(
-            result.error || "Gagal mengambil transaksi."
+            result.error ||
+              "Gagal mengambil transaksi."
           );
         }
 
-        const loadedTransactions: Transaction[] =
+        const loadedTransactions:
+          Transaction[] =
           result.transactions.map(
-            (transaction: {
-              id: string;
-              type: "expense" | "income";
-              amount: number;
-              category: string;
-              account: string;
-              date: string;
-              note: string;
-              merchant?: string;
-              location?: string;
-              createdAt?: string;
-            }) => ({
+            (
+              transaction: {
+                id: string;
+                type:
+                  | "expense"
+                  | "income";
+                amount: number;
+                category: string;
+                subCategory?: string;
+                account: string;
+                date: string;
+                time?: string;
+                note: string;
+                merchant?: string;
+                location?: string;
+                tag?: string;
+                attachment?: string;
+                source?: string;
+                status?: string;
+                createdAt?: string;
+              }
+            ) => ({
               id: transaction.id,
               type: transaction.type,
               amount: transaction.amount,
-              category: transaction.category,
-              account: transaction.account,
-              date: transaction.date,
-              note: transaction.note || "",
-              merchant: transaction.merchant || "",
-              location: transaction.location || "",
-              createdAt: transaction.createdAt,
+              category:
+                transaction.category,
+              subCategory:
+                transaction.subCategory ||
+                "",
+              account:
+                transaction.account,
+              date:
+                transaction.date,
+              time:
+                transaction.time ||
+                "",
+              note:
+                transaction.note ||
+                "",
+              merchant:
+                transaction.merchant ||
+                "",
+              location:
+                transaction.location ||
+                "",
+              tag:
+                transaction.tag ||
+                "",
+              attachment:
+                transaction.attachment ||
+                "",
+              source:
+                transaction.source ||
+                "",
+              status:
+                transaction.status ||
+                "",
+              createdAt:
+                transaction.createdAt,
             })
           );
 
-        setTransactions(loadedTransactions);
+        setTransactions(
+          loadedTransactions
+        );
       } catch (error) {
         console.error(
           "Load transactions error:",
           error
         );
       } finally {
-        const elapsed = Date.now() - startTime;
-        const minimumLoadingTime = 800;
+        const elapsed =
+          Date.now() - startTime;
 
-        if (elapsed < minimumLoadingTime) {
-          await new Promise((resolve) =>
-            setTimeout(
-              resolve,
-              minimumLoadingTime - elapsed
-            )
+        const minimumLoadingTime =
+          800;
+
+        if (
+          elapsed <
+          minimumLoadingTime
+        ) {
+          await new Promise(
+            (resolve) =>
+              setTimeout(
+                resolve,
+                minimumLoadingTime -
+                  elapsed
+              )
           );
         }
 
@@ -269,45 +532,63 @@ export default function Home() {
     loadTransactions();
   }, []);
 
-  // =========================
-  // HELPERS
-  // =========================
 
-  const formatInputAmount = (value: string) => {
-    const numbersOnly = value.replace(/\D/g, "");
+  /* =======================================================
+     HELPERS
+     ======================================================= */
+
+  const formatInputAmount = (
+    value: string
+  ) => {
+    const numbersOnly =
+      value.replace(/\D/g, "");
 
     if (!numbersOnly) {
       return "";
     }
 
-    return Number(numbersOnly).toLocaleString("id-ID");
+    return Number(
+      numbersOnly
+    ).toLocaleString("id-ID");
   };
 
-  const formatRupiah = (value: number) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      maximumFractionDigits: 0,
-    }).format(value);
+
+  const formatRupiah = (
+    value: number
+  ) => {
+    return new Intl.NumberFormat(
+      "id-ID",
+      {
+        style: "currency",
+        currency: "IDR",
+        maximumFractionDigits: 0,
+      }
+    ).format(value);
   };
 
-  // =========================
-  // SCAN IMAGE
-  // =========================
 
-  const handleScanImage = (file: File) => {
+  /* =======================================================
+     SCAN IMAGE
+     ======================================================= */
+
+  const handleScanImage = (
+    file: File
+  ) => {
     setScanImage(file);
 
-    const previewUrl = URL.createObjectURL(file);
+    const previewUrl =
+      URL.createObjectURL(file);
+
     setScanPreview(previewUrl);
 
     setScanResult(null);
     setScanError("");
   };
 
-  // =========================
-  // SCAN
-  // =========================
+
+  /* =======================================================
+     SCAN
+     ======================================================= */
 
   const handleScan = async () => {
     if (!scanImage) {
@@ -319,64 +600,100 @@ export default function Home() {
     setScanResult(null);
 
     try {
-      const formData = new FormData();
+      const formData =
+        new FormData();
 
-      formData.append("image", scanImage);
+      formData.append(
+        "image",
+        scanImage
+      );
 
-      const response = await fetch("/api/scan", {
-        method: "POST",
-        body: formData,
-      });
+      const response =
+        await fetch(
+          "/api/scan",
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
 
-      const result = await response.json();
+      const result =
+        await response.json();
 
-      if (!response.ok || !result.success) {
+      if (
+        !response.ok ||
+        !result.success
+      ) {
         throw new Error(
-          result.error || "Gagal membaca nota."
+          result.error ||
+            "Gagal membaca nota."
         );
       }
 
       setScanResult(result);
 
       if (result.transaction) {
-        const transaction = result.transaction;
+        const transaction =
+          result.transaction;
 
         setScanType(
-          transaction.type === "income"
+          transaction.type ===
+            "income"
             ? "income"
             : "expense"
         );
 
         setScanAmount(
-          transaction.amount != null
+          transaction.amount !=
+            null
             ? Number(
                 transaction.amount
-              ).toLocaleString("id-ID")
+              ).toLocaleString(
+                "id-ID"
+              )
             : ""
         );
 
         setScanCategory(
-          transaction.category || "Lainnya"
+          transaction.category ||
+            "Lainnya"
         );
 
         setScanAccount(
-          transaction.account || ""
+          transaction.account ||
+            ""
         );
 
         setScanMerchant(
-          transaction.merchant || ""
+          transaction.merchant ||
+            ""
         );
 
         setScanLocation(
-          transaction.location || ""
+          transaction.location ||
+            ""
         );
 
         setScanDate(
-          transaction.date || ""
+          transaction.date ||
+            ""
+        );
+
+        /*
+         * Jam dari AI.
+         *
+         * Pastikan selalu HH:mm.
+         */
+        setScanTime(
+          normalizeTime(
+            transaction.time ||
+              ""
+          )
         );
 
         setScanNote(
-          transaction.note || ""
+          transaction.note ||
+            ""
         );
       }
     } catch (error) {
@@ -395,241 +712,389 @@ export default function Home() {
     }
   };
 
-  // =========================
-  // SAVE SCANNED TRANSACTION
-  // =========================
 
-  const saveScannedTransaction = async () => {
-    const numericAmount = Number(
-      scanAmount.replace(/\./g, "")
-    );
+  /* =======================================================
+     SAVE SCANNED TRANSACTION
+     ======================================================= */
 
-    if (!numericAmount || numericAmount <= 0) {
-      alert("Nominal transaksi belum benar.");
-      return;
-    }
-
-    if (!scanDate) {
-      alert("Tanggal transaksi belum diisi.");
-      return;
-    }
-
-    setIsSavingScan(true);
-
-    try {
-      const response = await fetch(
-        "/api/transactions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            type: scanType,
-            amount: numericAmount,
-            category: scanCategory,
-            account: scanAccount,
-            date: scanDate,
-            note: scanNote,
-            merchant: scanMerchant,
-            location: scanLocation,
-            source: "scan",
-            status: "confirmed",
-          }),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        throw new Error(
-          result.error ||
-            "Gagal menyimpan transaksi."
-        );
-      }
-
-      const newTransaction: Transaction = {
-        id: result.id,
-        type: scanType,
-        amount: numericAmount,
-        category: scanCategory,
-        account: scanAccount,
-        date: scanDate,
-        note: scanNote,
-        merchant: scanMerchant,
-        location: scanLocation,
-      };
-
-      setTransactions((current) => [
-        newTransaction,
-        ...current,
-      ]);
-
-      // Reset scan
-      setScanImage(null);
-      setScanPreview(null);
-      setScanResult(null);
-      setScanError("");
-
-      setScanAmount("");
-      setScanCategory("Makanan");
-      setScanAccount("BNI");
-      setScanMerchant("");
-      setScanLocation("");
-      setScanDate("");
-      setScanNote("");
-
-      setActiveTab("home");
-
-      alert(
-        "Transaksi hasil scan berhasil disimpan! ✅"
-      );
-    } catch (error) {
-      console.error(
-        "Save scanned transaction error:",
-        error
-      );
-
-      alert(
-        error instanceof Error
-          ? error.message
-          : "Gagal menyimpan transaksi."
-      );
-    } finally {
-      setIsSavingScan(false);
-    }
-  };
-
-  // =========================
-  // MANUAL SAVE
-  // =========================
-
-  const saveTransaction = async () => {
-    const numericAmount = Number(
-      amount.replace(/\./g, "")
-    );
-
-    if (!numericAmount || numericAmount <= 0) {
-      alert("Masukkan nominal transaksi.");
-      return;
-    }
-
-    setSavingTransaction(true);
-
-    const startTime = Date.now();
-
-    try {
-      const response = await fetch(
-        "/api/transactions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            type,
-            amount: numericAmount,
-            category,
-            account,
-            date,
-            note,
-            source: "manual",
-            status: "confirmed",
-          }),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        throw new Error(
-          result.error || "Gagal menyimpan transaksi."
-        );
-      }
-
-      const newTransaction: Transaction = {
-        id: result.id,
-        type,
-        amount: numericAmount,
-        category,
-        account,
-        date,
-        note,
-      };
-
-      setTransactions((current) => [
-        newTransaction,
-        ...current,
-      ]);
-
-      setAmount("");
-      setNote("");
-      setActiveTab("home");
-
-      // Loader tetap tampil sebentar saat kembali ke Home
-      const elapsed = Date.now() - startTime;
-      const minimumLoadingTime = 800;
-
-      if (elapsed < minimumLoadingTime) {
-        await new Promise((resolve) =>
-          setTimeout(
-            resolve,
-            minimumLoadingTime - elapsed
+  const saveScannedTransaction =
+    async () => {
+      const numericAmount =
+        Number(
+          scanAmount.replace(
+            /\./g,
+            ""
           )
         );
+
+      if (
+        !numericAmount ||
+        numericAmount <= 0
+      ) {
+        alert(
+          "Nominal transaksi belum benar."
+        );
+
+        return;
       }
 
-      setSavingTransaction(false);
+      if (!scanDate) {
+        alert(
+          "Tanggal transaksi belum diisi."
+        );
 
-      alert("Transaksi berhasil disimpan! ✅");
-    } catch (error) {
-      console.error(
-        "Save transaction error:",
-        error
+        return;
+      }
+
+      /*
+       * Jam tidak diwajibkan.
+       *
+       * Kalau nota tidak memiliki jam,
+       * user tetap bisa menyimpan transaksi
+       * tanpa jam.
+       */
+      const normalizedTime =
+        normalizeTime(
+          scanTime
+        );
+
+      setIsSavingScan(true);
+
+      try {
+        const response =
+          await fetch(
+            "/api/transactions",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+              body:
+                JSON.stringify({
+                  type: scanType,
+                  amount:
+                    numericAmount,
+                  category:
+                    scanCategory,
+                  account:
+                    scanAccount,
+                  date:
+                    scanDate,
+
+                  /*
+                   * INI YANG SEBELUMNYA
+                   * BELUM DIKIRIM.
+                   */
+                  time:
+                    normalizedTime,
+
+                  note:
+                    scanNote,
+                  merchant:
+                    scanMerchant,
+                  location:
+                    scanLocation,
+                  source:
+                    "scan",
+                  status:
+                    "confirmed",
+                }),
+            }
+          );
+
+        const result =
+          await response.json();
+
+        if (
+          !response.ok ||
+          !result.success
+        ) {
+          throw new Error(
+            result.error ||
+              "Gagal menyimpan transaksi."
+          );
+        }
+
+        const newTransaction:
+          Transaction = {
+          id: result.id,
+          type: scanType,
+          amount:
+            numericAmount,
+          category:
+            scanCategory,
+          account:
+            scanAccount,
+          date:
+            scanDate,
+          time:
+            normalizedTime,
+          note:
+            scanNote,
+          merchant:
+            scanMerchant,
+          location:
+            scanLocation,
+        };
+
+        setTransactions(
+          (current) => [
+            newTransaction,
+            ...current,
+          ]
+        );
+
+        // Reset scan
+        setScanImage(null);
+        setScanPreview(null);
+        setScanResult(null);
+        setScanError("");
+
+        setScanAmount("");
+        setScanCategory(
+          "Makanan"
+        );
+        setScanAccount("BNI");
+        setScanMerchant("");
+        setScanLocation("");
+        setScanDate("");
+        setScanTime("");
+        setScanNote("");
+
+        setActiveTab("home");
+
+        alert(
+          "Transaksi hasil scan berhasil disimpan! ✅"
+        );
+      } catch (error) {
+        console.error(
+          "Save scanned transaction error:",
+          error
+        );
+
+        alert(
+          error instanceof Error
+            ? error.message
+            : "Gagal menyimpan transaksi."
+        );
+      } finally {
+        setIsSavingScan(false);
+      }
+    };
+
+
+  /* =======================================================
+     MANUAL SAVE
+     ======================================================= */
+
+  const saveTransaction =
+    async () => {
+      const numericAmount =
+        Number(
+          amount.replace(
+            /\./g,
+            ""
+          )
+        );
+
+      if (
+        !numericAmount ||
+        numericAmount <= 0
+      ) {
+        alert(
+          "Masukkan nominal transaksi."
+        );
+
+        return;
+      }
+
+      setSavingTransaction(true);
+
+      const startTime =
+        Date.now();
+
+      try {
+        const normalizedTime =
+          normalizeTime(time);
+
+        const response =
+          await fetch(
+            "/api/transactions",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+              body:
+                JSON.stringify({
+                  type,
+                  amount:
+                    numericAmount,
+                  category,
+                  account,
+                  date,
+
+                  /*
+                   * Manual input juga
+                   * menyimpan jam.
+                   */
+                  time:
+                    normalizedTime,
+
+                  note,
+                  source:
+                    "manual",
+                  status:
+                    "confirmed",
+                }),
+            }
+          );
+
+        const result =
+          await response.json();
+
+        if (
+          !response.ok ||
+          !result.success
+        ) {
+          throw new Error(
+            result.error ||
+              "Gagal menyimpan transaksi."
+          );
+        }
+
+        const newTransaction:
+          Transaction = {
+          id: result.id,
+          type,
+          amount:
+            numericAmount,
+          category,
+          account,
+          date,
+          time:
+            normalizedTime,
+          note,
+        };
+
+        setTransactions(
+          (current) => [
+            newTransaction,
+            ...current,
+          ]
+        );
+
+        setAmount("");
+        setNote("");
+
+        /*
+         * Setelah transaksi berhasil,
+         * tanggal dan jam kembali ke waktu
+         * sekarang.
+         */
+        setDate(
+          getLocalDate()
+        );
+
+        setTime(
+          getLocalTime()
+        );
+
+        setActiveTab("home");
+
+        const elapsed =
+          Date.now() -
+          startTime;
+
+        const minimumLoadingTime =
+          800;
+
+        if (
+          elapsed <
+          minimumLoadingTime
+        ) {
+          await new Promise(
+            (resolve) =>
+              setTimeout(
+                resolve,
+                minimumLoadingTime -
+                  elapsed
+              )
+          );
+        }
+
+        setSavingTransaction(
+          false
+        );
+
+        alert(
+          "Transaksi berhasil disimpan! ✅"
+        );
+      } catch (error) {
+        console.error(
+          "Save transaction error:",
+          error
+        );
+
+        setSavingTransaction(false);
+
+        alert(
+          error instanceof Error
+            ? error.message
+            : "Gagal menyimpan transaksi."
+        );
+      }
+    };
+
+
+  /* =======================================================
+     CALCULATIONS
+     ======================================================= */
+
+  const totalIncome =
+    transactions
+      .filter(
+        (transaction) =>
+          transaction.type ===
+          "income"
+      )
+      .reduce(
+        (
+          total,
+          transaction
+        ) =>
+          total +
+          transaction.amount,
+        0
       );
 
-      setSavingTransaction(false);
-
-      alert(
-        error instanceof Error
-          ? error.message
-          : "Gagal menyimpan transaksi."
+  const totalExpense =
+    transactions
+      .filter(
+        (transaction) =>
+          transaction.type ===
+          "expense"
+      )
+      .reduce(
+        (
+          total,
+          transaction
+        ) =>
+          total +
+          transaction.amount,
+        0
       );
-    }
-  };
-
-  // =========================
-  // CALCULATIONS
-  // =========================
-
-  const totalIncome = transactions
-    .filter(
-      (transaction) =>
-        transaction.type === "income"
-    )
-    .reduce(
-      (total, transaction) =>
-        total + transaction.amount,
-      0
-    );
-
-  const totalExpense = transactions
-    .filter(
-      (transaction) =>
-        transaction.type === "expense"
-    )
-    .reduce(
-      (total, transaction) =>
-        total + transaction.amount,
-      0
-    );
 
   const totalBalance =
-    totalIncome - totalExpense;
+    totalIncome -
+    totalExpense;
 
-  // =========================
-  // HOME
-  // =========================
+
+  /* =======================================================
+     HOME
+     ======================================================= */
 
   const renderHome = () => (
     <>
@@ -645,11 +1110,14 @@ export default function Home() {
         </p>
 
         <p className="mt-2 text-3xl font-bold">
-          {formatRupiah(totalBalance)}
+          {formatRupiah(
+            totalBalance
+          )}
         </p>
 
         <p className="mt-3 text-xs text-gray-400">
-          {transactions.length} transaksi
+          {transactions.length}{" "}
+          transaksi
         </p>
       </section>
 
@@ -723,7 +1191,8 @@ export default function Home() {
           </button>
         </div>
 
-        {transactions.length === 0 ? (
+        {transactions.length ===
+        0 ? (
           <div className="mt-3 rounded-2xl border border-black/5 bg-white p-5 text-center shadow-sm">
             <div className="text-3xl">
               🧾
@@ -741,60 +1210,82 @@ export default function Home() {
           <div className="mt-3 space-y-2">
             {transactions
               .slice(0, 5)
-              .map((transaction) => (
-                <div
-                  key={transaction.id}
-                  className="flex items-center justify-between rounded-2xl border border-black/5 bg-white p-4 shadow-sm"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
+              .map(
+                (
+                  transaction
+                ) => (
+                  <div
+                    key={
+                      transaction.id
+                    }
+                    className="flex items-center justify-between rounded-2xl border border-black/5 bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
+                        {transaction.type ===
+                        "expense"
+                          ? "💸"
+                          : "💰"}
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-semibold">
+                          {transaction.note ||
+                            transaction.merchant ||
+                            transaction.category}
+                        </p>
+
+                        <p className="text-xs text-gray-500">
+                          {
+                            transaction.category
+                          }{" "}
+                          ·{" "}
+                          {
+                            transaction.account
+                          }
+                        </p>
+
+                        {transaction.time && (
+                          <p className="text-xs text-gray-400">
+                            {transaction.date}{" "}
+                            ·{" "}
+                            {
+                              transaction.time
+                            }
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <p
+                      className={`text-sm font-semibold ${
+                        transaction.type ===
+                        "expense"
+                          ? "text-red-500"
+                          : "text-green-600"
+                      }`}
+                    >
                       {transaction.type ===
                       "expense"
-                        ? "💸"
-                        : "💰"}
-                    </div>
-
-                    <div>
-                      <p className="text-sm font-semibold">
-                        {transaction.note ||
-                          transaction.merchant ||
-                          transaction.category}
-                      </p>
-
-                      <p className="text-xs text-gray-500">
-                        {transaction.category} ·{" "}
-                        {transaction.account}
-                      </p>
-                    </div>
+                        ? "-"
+                        : "+"}
+                      {formatRupiah(
+                        transaction.amount
+                      )}
+                    </p>
                   </div>
-
-                  <p
-                    className={`text-sm font-semibold ${
-                      transaction.type ===
-                      "expense"
-                        ? "text-red-500"
-                        : "text-green-600"
-                    }`}
-                  >
-                    {transaction.type ===
-                    "expense"
-                      ? "-"
-                      : "+"}
-                    {formatRupiah(
-                      transaction.amount
-                    )}
-                  </p>
-                </div>
-              ))}
+                )
+              )}
           </div>
         )}
       </section>
     </>
   );
 
-  // =========================
-  // MANUAL INPUT
-  // =========================
+
+  /* =======================================================
+     MANUAL INPUT
+     ======================================================= */
 
   const renderInput = () => (
     <section className="pt-7">
@@ -890,14 +1381,16 @@ export default function Home() {
           }
           className="mt-2 w-full rounded-xl border border-black/10 bg-white p-3 outline-none"
         >
-          {categories.map((item) => (
-            <option
-              key={item}
-              value={item}
-            >
-              {item}
-            </option>
-          ))}
+          {categories.map(
+            (item) => (
+              <option
+                key={item}
+                value={item}
+              >
+                {item}
+              </option>
+            )
+          )}
         </select>
       </div>
 
@@ -915,14 +1408,16 @@ export default function Home() {
           }
           className="mt-2 w-full rounded-xl border border-black/10 bg-white p-3 outline-none"
         >
-          {accounts.map((item) => (
-            <option
-              key={item}
-              value={item}
-            >
-              {item}
-            </option>
-          ))}
+          {accounts.map(
+            (item) => (
+              <option
+                key={item}
+                value={item}
+              >
+                {item}
+              </option>
+            )
+          )}
         </select>
       </div>
 
@@ -941,6 +1436,28 @@ export default function Home() {
           }
           className="mt-2 w-full rounded-xl border border-black/10 bg-white p-3 outline-none"
         />
+      </div>
+
+      {/* TIME MANUAL */}
+      <div className="mt-5">
+        <label className="text-sm font-semibold">
+          Jam
+        </label>
+
+        <input
+          type="time"
+          value={time}
+          onChange={(event) =>
+            setTime(
+              event.target.value
+            )
+          }
+          className="mt-2 w-full rounded-xl border border-black/10 bg-white p-3 outline-none"
+        />
+
+        <p className="mt-1 text-xs text-gray-400">
+          Format 24 jam
+        </p>
       </div>
 
       <div className="mt-5">
@@ -962,7 +1479,9 @@ export default function Home() {
       </div>
 
       <button
-        onClick={saveTransaction}
+        onClick={
+          saveTransaction
+        }
         className="mt-6 w-full rounded-xl bg-[#ffa500] p-4 font-bold text-black shadow-sm transition active:scale-[0.98]"
       >
         Simpan Transaksi
@@ -970,9 +1489,10 @@ export default function Home() {
     </section>
   );
 
-  // =========================
-  // SCAN
-  // =========================
+
+  /* =======================================================
+     SCAN
+     ======================================================= */
 
   const renderScan = () => (
     <section className="pt-7">
@@ -1009,12 +1529,17 @@ export default function Home() {
                 accept="image/*"
                 capture="environment"
                 className="hidden"
-                onChange={(event) => {
+                onChange={(
+                  event
+                ) => {
                   const file =
-                    event.target.files?.[0];
+                    event.target
+                      .files?.[0];
 
                   if (file) {
-                    handleScanImage(file);
+                    handleScanImage(
+                      file
+                    );
                   }
                 }}
               />
@@ -1037,12 +1562,17 @@ export default function Home() {
                   accept="image/*"
                   capture="environment"
                   className="hidden"
-                  onChange={(event) => {
+                  onChange={(
+                    event
+                  ) => {
                     const file =
-                      event.target.files?.[0];
+                      event.target
+                        .files?.[0];
 
                     if (file) {
-                      handleScanImage(file);
+                      handleScanImage(
+                        file
+                      );
                     }
                   }}
                 />
@@ -1050,9 +1580,13 @@ export default function Home() {
 
               <button
                 type="button"
-                disabled={isScanning}
+                disabled={
+                  isScanning
+                }
                 className="flex-1 rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
-                onClick={handleScan}
+                onClick={
+                  handleScan
+                }
               >
                 {isScanning
                   ? "Membaca Nota..."
@@ -1094,7 +1628,8 @@ export default function Home() {
       )}
 
       {/* INVALID */}
-      {scanResult?.status === "invalid" && (
+      {scanResult?.status ===
+        "invalid" && (
         <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-5">
           <div className="text-3xl">
             ⚠️
@@ -1105,7 +1640,9 @@ export default function Home() {
           </p>
 
           <p className="mt-1 text-sm text-red-600">
-            {scanResult.message}
+            {
+              scanResult.message
+            }
           </p>
 
           <label className="mt-4 inline-block cursor-pointer rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white">
@@ -1116,12 +1653,17 @@ export default function Home() {
               accept="image/*"
               capture="environment"
               className="hidden"
-              onChange={(event) => {
+              onChange={(
+                event
+              ) => {
                 const file =
-                  event.target.files?.[0];
+                  event.target
+                    .files?.[0];
 
                 if (file) {
-                  handleScanImage(file);
+                  handleScanImage(
+                    file
+                  );
                 }
               }}
             />
@@ -1141,7 +1683,8 @@ export default function Home() {
               <p className="mt-1 text-xs text-gray-500">
                 AI membaca dengan confidence{" "}
                 {Math.round(
-                  scanResult.confidence * 100
+                  scanResult.confidence *
+                    100
                 )}
                 %
               </p>
@@ -1164,7 +1707,9 @@ export default function Home() {
 
           {scanResult.message && (
             <div className="mt-4 rounded-xl bg-gray-50 p-3 text-sm text-gray-600">
-              {scanResult.message}
+              {
+                scanResult.message
+              }
             </div>
           )}
 
@@ -1178,10 +1723,13 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() =>
-                  setScanType("expense")
+                  setScanType(
+                    "expense"
+                  )
                 }
                 className={`rounded-xl border p-3 text-sm font-medium ${
-                  scanType === "expense"
+                  scanType ===
+                  "expense"
                     ? "border-black bg-black text-white"
                     : "border-black/10 bg-white"
                 }`}
@@ -1192,10 +1740,13 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() =>
-                  setScanType("income")
+                  setScanType(
+                    "income"
+                  )
                 }
                 className={`rounded-xl border p-3 text-sm font-medium ${
-                  scanType === "income"
+                  scanType ===
+                  "income"
                     ? "border-black bg-black text-white"
                     : "border-black/10 bg-white"
                 }`}
@@ -1219,11 +1770,16 @@ export default function Home() {
               <input
                 type="text"
                 inputMode="numeric"
-                value={scanAmount}
-                onChange={(event) => {
+                value={
+                  scanAmount
+                }
+                onChange={(
+                  event
+                ) => {
                   setScanAmount(
                     formatInputAmount(
-                      event.target.value
+                      event.target
+                        .value
                     )
                   );
                 }}
@@ -1240,22 +1796,29 @@ export default function Home() {
             </label>
 
             <select
-              value={scanCategory}
-              onChange={(event) =>
+              value={
+                scanCategory
+              }
+              onChange={(
+                event
+              ) =>
                 setScanCategory(
-                  event.target.value
+                  event.target
+                    .value
                 )
               }
               className="mt-2 w-full rounded-xl border border-black/10 bg-white p-3 outline-none"
             >
-              {categories.map((item) => (
-                <option
-                  key={item}
-                  value={item}
-                >
-                  {item}
-                </option>
-              ))}
+              {categories.map(
+                (item) => (
+                  <option
+                    key={item}
+                    value={item}
+                  >
+                    {item}
+                  </option>
+                )
+              )}
             </select>
           </div>
 
@@ -1267,10 +1830,15 @@ export default function Home() {
 
             <input
               type="text"
-              value={scanAccount}
-              onChange={(event) =>
+              value={
+                scanAccount
+              }
+              onChange={(
+                event
+              ) =>
                 setScanAccount(
-                  event.target.value
+                  event.target
+                    .value
                 )
               }
               placeholder="Contoh: BCA QR"
@@ -1286,10 +1854,15 @@ export default function Home() {
 
             <input
               type="text"
-              value={scanMerchant}
-              onChange={(event) =>
+              value={
+                scanMerchant
+              }
+              onChange={(
+                event
+              ) =>
                 setScanMerchant(
-                  event.target.value
+                  event.target
+                    .value
                 )
               }
               placeholder="Nama merchant"
@@ -1305,10 +1878,15 @@ export default function Home() {
 
             <input
               type="text"
-              value={scanLocation}
-              onChange={(event) =>
+              value={
+                scanLocation
+              }
+              onChange={(
+                event
+              ) =>
                 setScanLocation(
-                  event.target.value
+                  event.target
+                    .value
                 )
               }
               placeholder="Alamat merchant"
@@ -1324,10 +1902,15 @@ export default function Home() {
 
             <input
               type="date"
-              value={scanDate}
-              onChange={(event) =>
+              value={
+                scanDate
+              }
+              onChange={(
+                event
+              ) =>
                 setScanDate(
-                  event.target.value
+                  event.target
+                    .value
                 )
               }
               className={`mt-2 w-full rounded-xl border bg-white p-3 outline-none ${
@@ -1345,6 +1928,45 @@ export default function Home() {
             )}
           </div>
 
+          {/* TIME */}
+          <div className="mt-5">
+            <label className="text-sm font-semibold">
+              Jam
+            </label>
+
+            <input
+              type="time"
+              value={
+                scanTime
+              }
+              onChange={(
+                event
+              ) =>
+                setScanTime(
+                  event.target
+                    .value
+                )
+              }
+              className={`mt-2 w-full rounded-xl border bg-white p-3 outline-none ${
+                !scanTime
+                  ? "border-yellow-300"
+                  : "border-black/10"
+              }`}
+            />
+
+            {!scanTime ? (
+              <p className="mt-1 text-xs text-yellow-600">
+                Jam belum terbaca dari nota. Kamu bisa
+                mengisinya manual.
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-gray-400">
+                Format 24 jam ·{" "}
+                {scanTime}
+              </p>
+            )}
+          </div>
+
           {/* DESCRIPTION */}
           <div className="mt-5">
             <label className="text-sm font-semibold">
@@ -1352,10 +1974,15 @@ export default function Home() {
             </label>
 
             <textarea
-              value={scanNote}
-              onChange={(event) =>
+              value={
+                scanNote
+              }
+              onChange={(
+                event
+              ) =>
                 setScanNote(
-                  event.target.value
+                  event.target
+                    .value
                 )
               }
               placeholder="Contoh: Ferrara Dubai Chewy dan Romeo Chocolate"
@@ -1365,8 +1992,9 @@ export default function Home() {
           </div>
 
           {/* MISSING FIELDS */}
-          {scanResult.missingFields.length >
-            0 && (
+          {scanResult
+            .missingFields
+            .length > 0 && (
             <div className="mt-5 rounded-xl bg-yellow-50 p-4">
               <p className="text-sm font-semibold text-yellow-800">
                 Beberapa data perlu diperiksa:
@@ -1375,7 +2003,11 @@ export default function Home() {
               <ul className="mt-2 list-disc pl-5 text-xs text-yellow-700">
                 {scanResult.missingFields.map(
                   (field) => (
-                    <li key={field}>
+                    <li
+                      key={
+                        field
+                      }
+                    >
                       {field}
                     </li>
                   )
@@ -1406,9 +2038,10 @@ export default function Home() {
     </section>
   );
 
-  // =========================
-  // DATA
-  // =========================
+
+  /* =======================================================
+     DATA
+     ======================================================= */
 
   const renderData = () => (
     <section className="pt-7">
@@ -1417,11 +2050,13 @@ export default function Home() {
       </h2>
 
       <p className="mt-1 text-sm text-gray-500">
-        {transactions.length} transaksi
+        {transactions.length}{" "}
+        transaksi
       </p>
 
       <div className="mt-5 space-y-2">
-        {transactions.length === 0 ? (
+        {transactions.length ===
+        0 ? (
           <div className="rounded-2xl bg-white p-6 text-center">
             <div className="text-3xl">
               🧾
@@ -1433,9 +2068,13 @@ export default function Home() {
           </div>
         ) : (
           transactions.map(
-            (transaction) => (
+            (
+              transaction
+            ) => (
               <div
-                key={transaction.id}
+                key={
+                  transaction.id
+                }
                 className="rounded-2xl border border-black/5 bg-white p-4 shadow-sm"
               >
                 <div className="flex justify-between gap-4">
@@ -1447,20 +2086,39 @@ export default function Home() {
                     </p>
 
                     <p className="mt-1 text-xs text-gray-500">
-                      {transaction.category} ·{" "}
-                      {transaction.account}
+                      {
+                        transaction.category
+                      }{" "}
+                      ·{" "}
+                      {
+                        transaction.account
+                      }
                     </p>
 
                     {transaction.location && (
                       <p className="mt-1 text-xs text-gray-400">
-                        📍 {transaction.location}
+                        📍{" "}
+                        {
+                          transaction.location
+                        }
                       </p>
                     )}
 
                     <p className="mt-1 text-xs text-gray-400">
                       Tanggal transaksi:{" "}
-                      {transaction.date}
+                      {
+                        transaction.date
+                      }
                     </p>
+
+                    {transaction.time && (
+                      <p className="mt-1 text-xs text-gray-400">
+                        Jam transaksi:{" "}
+                        {
+                          transaction.time
+                        }
+                      </p>
+                    )}
 
                     {transaction.createdAt && (
                       <p className="mt-1 text-xs text-gray-400">
@@ -1499,9 +2157,10 @@ export default function Home() {
     </section>
   );
 
-  // =========================
-  // MENU
-  // =========================
+
+  /* =======================================================
+     MENU
+     ======================================================= */
 
   const menuItems = [
     {
@@ -1526,9 +2185,10 @@ export default function Home() {
     },
   ];
 
-  // =========================
-  // MAIN
-  // =========================
+
+  /* =======================================================
+     MAIN
+     ======================================================= */
 
   return (
     <>
@@ -1547,7 +2207,9 @@ export default function Home() {
           <div className="mx-auto flex max-w-md items-center justify-between px-5 py-4">
             <button
               onClick={() =>
-                setActiveTab("home")
+                setActiveTab(
+                  "home"
+                )
               }
               className="flex items-center gap-3 text-left"
             >
@@ -1574,50 +2236,60 @@ export default function Home() {
 
         {/* CONTENT */}
         <div className="mx-auto max-w-md px-5 pb-28">
-
-          {activeTab === "home" &&
+          {activeTab ===
+            "home" &&
             renderHome()}
 
-          {activeTab === "input" &&
+          {activeTab ===
+            "input" &&
             renderInput()}
 
-          {activeTab === "scan" &&
+          {activeTab ===
+            "scan" &&
             renderScan()}
 
-          {activeTab === "data" &&
+          {activeTab ===
+            "data" &&
             renderData()}
-
         </div>
 
         {/* BOTTOM NAV */}
         <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-black/5 bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-md items-center justify-around px-2 py-2">
+            {menuItems.map(
+              (item) => (
+                <button
+                  key={
+                    item.id
+                  }
+                  onClick={() =>
+                    setActiveTab(
+                      item.id
+                    )
+                  }
+                  className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs transition ${
+                    activeTab ===
+                    item.id
+                      ? "font-semibold text-[#171717]"
+                      : "text-gray-400"
+                  }`}
+                >
+                  <span className="text-lg">
+                    {
+                      item.icon
+                    }
+                  </span>
 
-            {menuItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() =>
-                  setActiveTab(item.id)
-                }
-                className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs transition ${
-                  activeTab === item.id
-                    ? "font-semibold text-[#171717]"
-                    : "text-gray-400"
-                }`}
-              >
-                <span className="text-lg">
-                  {item.icon}
-                </span>
-
-                <span>
-                  {item.label}
-                </span>
-              </button>
-            ))}
-
+                  <span>
+                    {
+                      item.label
+                    }
+                  </span>
+                </button>
+              )
+            )}
           </div>
         </nav>
-
       </main>
     </>
   );

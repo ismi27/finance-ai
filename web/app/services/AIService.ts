@@ -26,6 +26,7 @@ Ubah teks transaksi pengguna menjadi JSON dengan struktur berikut:
   "account": string,
   "merchant": string,
   "date": string,
+  "time": string,
   "note": string,
   "location": string,
   "tag": string
@@ -44,6 +45,13 @@ ATURAN:
 - merchant gunakan nama toko, restoran, perusahaan, atau pihak transaksi jika disebutkan.
 - date gunakan format YYYY-MM-DD jika tanggal lengkap disebutkan.
 - Jika tanggal tidak lengkap atau tidak disebutkan, gunakan "".
+- time gunakan format 24 jam HH:mm jika jam disebutkan.
+- Contoh "7 malam" = "19:00".
+- Contoh "jam 8 malam" = "20:00".
+- Contoh "08.30" = "08:30".
+- Contoh "8:30 PM" = "20:30".
+- Jika jam tidak disebutkan, gunakan "".
+- Jangan menebak jam yang tidak disebutkan.
 - location gunakan lokasi atau alamat merchant jika disebutkan.
 - Jika informasi tidak disebutkan, gunakan "".
 - note gunakan deskripsi singkat mengenai transaksi.
@@ -57,7 +65,7 @@ ATURAN:
 CONTOH:
 
 Jika teks:
-"Makan di Luuca, beli Ferrara Dubai Chewy dan Romeo Chocolate, total 53000, bayar BCA QR"
+"Makan di Luuca jam 19:30, beli Ferrara Dubai Chewy dan Romeo Chocolate, total 53000, bayar BCA QR"
 
 Maka hasilnya:
 
@@ -69,6 +77,7 @@ Maka hasilnya:
   "account": "BCA QR",
   "merchant": "Luuca Indonesia",
   "date": "",
+  "time": "19:30",
   "note": "Ferrara Dubai Chewy dan Romeo Chocolate",
   "location": "Luuca Indonesia, Jl. Letjen S. Parman, Jakarta Barat",
   "tag": ""
@@ -132,6 +141,7 @@ Kembalikan JSON DENGAN STRUKTUR PERSIS berikut:
     "account": string,
     "merchant": string,
     "date": string,
+    "time": string,
     "note": string,
     "location": string,
     "tag": string
@@ -172,10 +182,10 @@ tidak dapat dibaca:
 - transaction tetap diisi
 - field yang tidak diketahui harus ""
 - amount yang tidak diketahui harus null
-- masukkan field yang kosong ke missingFields.
+- masukkan field yang kosong dan penting ke missingFields.
 
 Jangan menganggap gambar invalid hanya karena tanggal,
-rekening, lokasi, atau informasi lain tidak terbaca.
+jam, rekening, lokasi, atau informasi lain tidak terbaca.
 
 
 3. TRANSAKSI SIAP
@@ -191,6 +201,10 @@ berhasil dibaca:
 Jangan pernah membuat informasi yang tidak terlihat pada gambar.
 
 Jika tidak yakin terhadap suatu informasi, kosongkan field tersebut.
+
+TERMASUK tanggal dan jam.
+
+Jangan pernah menebak tanggal atau jam.
 
 
 5. NOMINAL
@@ -390,7 +404,51 @@ dan tanggal/hari tidak terlihat dengan jelas:
 Jangan menebak tanggal.
 
 
-14. CONFIDENCE
+14. TIME
+
+Ini sangat penting.
+
+Baca jam transaksi jika jam tercetak pada nota.
+
+Gunakan format 24 JAM:
+
+HH:mm
+
+Contoh:
+
+08:30 -> "08:30"
+8:30 AM -> "08:30"
+8:30 PM -> "20:30"
+19:45 -> "19:45"
+7:15 PM -> "19:15"
+
+Jika nota menampilkan detik, abaikan detik.
+
+Contoh:
+
+19:45:32 -> "19:45"
+
+Jika jam tidak terlihat:
+
+"time": ""
+
+Jika jam buram atau tidak dapat dipastikan:
+
+"time": ""
+
+JANGAN menebak jam berdasarkan waktu scan,
+waktu upload, waktu sekarang, atau informasi lainnya.
+
+Hanya gunakan jam yang benar-benar terlihat pada bukti transaksi.
+
+Jika time kosong, tambahkan:
+
+"time"
+
+ke missingFields.
+
+
+15. CONFIDENCE
 
 confidence adalah angka antara 0 dan 1.
 
@@ -404,7 +462,7 @@ Confidence harus mencerminkan keyakinan terhadap keseluruhan
 hasil pembacaan transaksi.
 
 
-15. STATUS
+16. STATUS
 
 Gunakan:
 
@@ -418,8 +476,11 @@ yang belum terbaca.
 "ready"
 jika informasi utama transaksi sudah berhasil dibaca.
 
+Tanggal atau jam yang tidak terlihat tidak otomatis membuat
+gambar invalid.
 
-16. MISSING FIELDS
+
+17. MISSING FIELDS
 
 Masukkan nama field yang kosong dan penting ke dalam:
 
@@ -428,7 +489,8 @@ Masukkan nama field yang kosong dan penting ke dalam:
 Contoh:
 
 [
-  "date"
+  "date",
+  "time"
 ]
 
 Jika tidak ada informasi penting yang hilang:
@@ -436,7 +498,7 @@ Jika tidak ada informasi penting yang hilang:
 []
 
 
-17. MESSAGE
+18. MESSAGE
 
 message harus berupa penjelasan singkat kepada pengguna.
 
@@ -446,10 +508,10 @@ Contoh:
 
 atau:
 
-"Struk berhasil dibaca, tetapi tanggal transaksi belum dapat dipastikan."
+"Struk berhasil dibaca, tetapi tanggal dan jam transaksi belum dapat dipastikan."
 
 
-18. HASIL AKHIR
+19. HASIL AKHIR
 
 Hanya kembalikan JSON.
 
@@ -489,5 +551,111 @@ Jangan membuat informasi yang tidak terlihat pada gambar.
     throw new Error("Gemini tidak memberikan hasil scan.");
   }
 
-  return JSON.parse(resultText);
+  const result = JSON.parse(resultText);
+
+  /*
+   * Normalisasi tambahan supaya time selalu ada
+   * dan selalu menggunakan format HH:mm.
+   */
+  if (result?.transaction) {
+    const rawTime = String(
+      result.transaction.time || ""
+    ).trim();
+
+    if (rawTime) {
+      const normalizedTime = normalizeTime(rawTime);
+
+      result.transaction.time = normalizedTime;
+
+      if (
+        !normalizedTime &&
+        Array.isArray(result.missingFields) &&
+        !result.missingFields.includes("time")
+      ) {
+        result.missingFields.push("time");
+      }
+    } else {
+      result.transaction.time = "";
+
+      if (
+        Array.isArray(result.missingFields) &&
+        !result.missingFields.includes("time")
+      ) {
+        result.missingFields.push("time");
+      }
+    }
+  }
+
+  return result;
+}
+
+
+/* =========================================================
+   NORMALIZE TIME
+   ========================================================= */
+
+function normalizeTime(value: string): string {
+  const text = value.trim().toUpperCase();
+
+  /*
+   * HH:mm
+   * 08:30
+   * 19:45
+   */
+  const twentyFourHourMatch = text.match(
+    /^(\d{1,2})[:.](\d{2})$/
+  );
+
+  if (twentyFourHourMatch) {
+    const hour = Number(twentyFourHourMatch[1]);
+    const minute = Number(twentyFourHourMatch[2]);
+
+    if (
+      hour >= 0 &&
+      hour <= 23 &&
+      minute >= 0 &&
+      minute <= 59
+    ) {
+      return `${String(hour).padStart(2, "0")}:${String(
+        minute
+      ).padStart(2, "0")}`;
+    }
+  }
+
+  /*
+   * 8:30 PM
+   * 08:30 AM
+   */
+  const amPmMatch = text.match(
+    /^(\d{1,2})[:.](\d{2})\s*(AM|PM)$/
+  );
+
+  if (amPmMatch) {
+    let hour = Number(amPmMatch[1]);
+    const minute = Number(amPmMatch[2]);
+    const period = amPmMatch[3];
+
+    if (
+      hour >= 1 &&
+      hour <= 12 &&
+      minute >= 0 &&
+      minute <= 59
+    ) {
+      if (period === "AM") {
+        if (hour === 12) {
+          hour = 0;
+        }
+      } else if (period === "PM") {
+        if (hour !== 12) {
+          hour += 12;
+        }
+      }
+
+      return `${String(hour).padStart(2, "0")}:${String(
+        minute
+      ).padStart(2, "0")}`;
+    }
+  }
+
+  return "";
 }
