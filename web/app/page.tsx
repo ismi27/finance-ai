@@ -190,9 +190,9 @@ export default function Home() {
     <>
       {/* GREETING */}
       <section className="pt-7">
-        <p className="text-sm text-gray-500">
+        {/* <p className="text-sm text-gray-500">
           Selamat datang 👋
-        </p>
+        </p> */}
 
         <h2 className="mt-1 text-2xl font-bold">
           Keuanganmu
@@ -220,7 +220,7 @@ export default function Home() {
           Quick Actions
         </h3>
 
-        <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => setActiveTab("scan")}
             className="rounded-2xl border border-black/5 bg-white p-4 text-left shadow-sm transition active:scale-[0.98]"
@@ -253,12 +253,14 @@ export default function Home() {
               Input transaksi manual
             </p>
           </button>
-          <QuickAddAI
-  onSaved={() => {
-    window.location.reload();
-  }}
-/>
+
+         
         </div>
+         <div className="mt-3">
+            <QuickAddAI onSaved={() => {
+              window.location.reload();
+            }} />
+          </div>
       </section>
 
       {/* RECENT TRANSACTIONS */}
@@ -625,7 +627,7 @@ export default function Home() {
 
             <div>
               <h1 className="text-base font-bold">
-                Finance AI
+                My Finance AI
               </h1>
 
               <p className="text-xs text-gray-500">
